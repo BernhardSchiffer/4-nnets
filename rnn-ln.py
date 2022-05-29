@@ -3,8 +3,6 @@ import torch
 from torch import nn
 import pandas as pd
 from collections import Counter
-import argparse
-from turtle import st
 import numpy as np
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -22,8 +20,8 @@ else:
     print("GPU not available, CPU used")
 
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, args):
-        self.args = args
+    def __init__(self, sequence_length):
+        self.sequence_length = sequence_length
         self.words = self.load_words()
         self.uniq_words = self.get_uniq_words()
         self.index_to_word = {index: word for index, word in enumerate(self.uniq_words)}
@@ -41,12 +39,12 @@ class Dataset(torch.utils.data.Dataset):
         return sorted(word_counts, key=word_counts.get, reverse=True)
 
     def __len__(self):
-        return len(self.words_indexes) - self.args.sequence_length
+        return len(self.words_indexes) - self.sequence_length
 
     def __getitem__(self, index):
         return (
-            torch.tensor(self.words_indexes[index:index+self.args.sequence_length]),
-            torch.tensor(self.words_indexes[index+1:index+self.args.sequence_length+1]),
+            torch.tensor(self.words_indexes[index:index+self.sequence_length]),
+            torch.tensor(self.words_indexes[index+1:index+self.sequence_length+1]),
         )
 
 class Model(nn.Module):
@@ -77,15 +75,15 @@ class Model(nn.Module):
                 torch.zeros(self.num_layers, sequence_length, self.lstm_size))
 
 # %%
-def train(dataset, model, args):
+def train(dataset, model, epochs, batch_size, sequence_length):
     model.train()
 
-    dataloader = DataLoader(dataset, batch_size=args.batch_size)
+    dataloader = DataLoader(dataset, batch_size=batch_size)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(args.max_epochs):
-        state_h, state_c = model.init_state(args.sequence_length)
+    for epoch in range(epochs):
+        state_h, state_c = model.init_state(sequence_length)
 
         for batch, (x, y) in enumerate(dataloader):
             optimizer.zero_grad()
@@ -95,7 +93,7 @@ def train(dataset, model, args):
             state_c = state_c.detach()
             loss.backward()
             optimizer.step()
-            print(f'epoch: {epoch}, batch: {batch}, loss: {loss.item()}')
+            #print(f'epoch: {epoch}, batch: {batch}, loss: {loss.item()}')
         print(f'epoch: {epoch}, loss: {loss.item()}')
 
 def predict(dataset, model, text, next_words=100):
@@ -118,20 +116,16 @@ def predict(dataset, model, text, next_words=100):
     return words
 
 # %%
-parser = argparse.ArgumentParser()
-parser.add_argument('--max-epochs', type=int, default=40)
-parser.add_argument('--batch-size', type=int, default=256)
-parser.add_argument('--sequence-length', type=int, default=4)
-args = parser.parse_args()
+dataset = Dataset(sequence_length=4)
 
-# %%
-dataset = Dataset(args)
+print(dataset.__getitem__(5))
 model = Model(dataset)
 model.to(device)
 # %%
-train(dataset, model, args)
+train(dataset, model, epochs=40, batch_size=128, sequence_length=4)
 # %%
 print(predict(dataset, model, text='Konzeption'))
 print(predict(dataset, model, text='Konzeption'))
 print(predict(dataset, model, text='Konzeption'))
 print(predict(dataset, model, text='Konzeption'))
+# %%
